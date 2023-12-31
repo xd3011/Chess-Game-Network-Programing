@@ -644,7 +644,74 @@ void *game_room(void *client_socket) {
     close(player_two);
 }
 
-// void *user(void *client_socket)
+void *user(void *client_socket) {
+    int player = *(int *)client_socket;
+    while (1) {
+        char datachoose[10];
+        bzero(datachoose, 10);
+        if (read(player, datachoose, 10) < 0) {
+            perror("ERROR reading from socket");
+            exit(1);
+        }
+        printf("Buffer: %s\n", datachoose);
+
+        if (datachoose[0] == 'l' && datachoose[1] == 'o') {
+            char login[64];
+            bzero(login, 64);
+            if (read(player, login, 64) < 0) {
+                perror("ERROR reading from socket");
+                exit(1);
+            }
+            printf("Buffer: %s\n", login);
+            pthread_t tid[1];
+
+            char *username = strtok(login, " ");
+            char *password = strtok(NULL, " ");
+
+            if (checkLogin(username, password)) {
+                send(player, "t", 1, 0);
+                pthread_mutex_lock(&general_mutex);  // Unecesary?
+                // Create thread if we have no user waiting
+                if (player_is_waiting == 0) {
+                    printf("Connected player, creating new game room...\n");
+                    pthread_create(&tid[0], NULL, &game_room, &player);
+                    pthread_mutex_unlock(&general_mutex);  // Unecesary?
+                    break;
+                }
+                // If we've a user waiting join that room
+                else {
+                    // Send user two signal
+                    printf("Connected player, joining game room... %d\n", player);
+                    challenging_player = player;
+                    pthread_mutex_unlock(&general_mutex);  // Unecesary?
+                    pthread_cond_signal(&player_to_join);
+                    break;
+                }
+            } else {
+                send(player, "f", 1, 0);
+            }
+        } else if (datachoose[0] == 'r' && datachoose[1] == 'e') {
+            char registers[64];
+            bzero(registers, 64);
+            if (read(player, registers, 64) < 0) {
+                perror("ERROR reading from socket");
+                exit(1);
+            }
+            printf("Buffer: %s\n", registers);
+            char *username = strtok(registers, " ");
+            char *password = strtok(NULL, " ");
+
+            if (registerAccount(username, password)) {
+                send(player, "t", 1, 0);
+            } else {
+                send(player, "f", 1, 0);
+            }
+        } else if (datachoose[0] == 'e' && datachoose[1] == 'x') {
+            printf("User %d exit", player);
+            break;
+        }
+    }
+}
 
 int main(int argc, char *argv[]) {
     setlocale(LC_ALL, "en_US.UTF-8");
@@ -696,68 +763,8 @@ int main(int argc, char *argv[]) {
             perror("ERROR on accept");
             exit(1);
         }
-        // pthread_t thread[1];
-        // pthread_create(&thread[0], NULL, &thread, &client_socket);
-        
-        char datachoose[10];
-        bzero(datachoose, 10);
-        if (read(client_socket, datachoose, 10) < 0) {
-            perror("ERROR reading from socket");
-            exit(1);
-        }
-        printf("Buffer: %s\n", datachoose);
-
-        if (datachoose[0] == 'l' && datachoose[1] == 'o') {
-            char login[64];
-            bzero(login, 64);
-            if (read(client_socket, login, 64) < 0) {
-                perror("ERROR reading from socket");
-                exit(1);
-            }
-            printf("Buffer: %s\n", login);
-            pthread_t tid[1];
-
-            char *username = strtok(login, " ");
-            char *password = strtok(NULL, " ");
-
-            if (checkLogin(username, password)) {
-                send(client_socket, "t", 1, 0);
-                pthread_mutex_lock(&general_mutex);  // Unecesary?
-                // Create thread if we have no user waiting
-                if (player_is_waiting == 0) {
-                    printf("Connected player, creating new game room...\n");
-                    pthread_create(&tid[0], NULL, &game_room, &client_socket);
-                    pthread_mutex_unlock(&general_mutex);  // Unecesary?
-                }
-                // If we've a user waiting join that room
-                else {
-                    // Send user two signal
-                    printf("Connected player, joining game room... %d\n", client_socket);
-                    challenging_player = client_socket;
-                    pthread_mutex_unlock(&general_mutex);  // Unecesary?
-                    pthread_cond_signal(&player_to_join);
-                }
-            } else {
-                send(client_socket, "f", 1, 0);
-            }
-        } 
-        else if (datachoose[0] == 'r' && datachoose[1] == 'e') {
-            char registers[64];
-            bzero(registers, 64);
-            if (read(client_socket, registers, 64) < 0) {
-                perror("ERROR reading from socket");
-                exit(1);
-            }
-            printf("Buffer: %s\n", registers);
-            char *username = strtok(registers, " ");
-            char *password = strtok(NULL, " ");
-
-            if (registerAccount(username, password)) {
-                send(client_socket, "t", 1, 0);
-            } else {
-                send(client_socket, "f", 1, 0);
-            }
-        }
+        pthread_t thread[1];
+        pthread_create(&thread[0], NULL, &user, &client_socket);
     }
     close(sockfd);
     return 0;

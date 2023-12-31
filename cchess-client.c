@@ -144,7 +144,7 @@ void menuLogin(void *sockfd) {
                         return;
                     } else if (buffer[0] == 'f') {
                         printf("Login false\n");
-                        exit(1);
+                        break;
                     }
                 }
                 break;
