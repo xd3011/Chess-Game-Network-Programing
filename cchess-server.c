@@ -11,6 +11,7 @@
 #include <wchar.h>
 
 #include "board.c"
+#include "user.c"
 
 #define PORT 8080;
 
@@ -551,11 +552,14 @@ void *game_room(void *client_socket) {
             printf("Player one (%d) move: %s\n", player_one, buffer);
 
             if (buffer[0] == 0 && buffer[1] == 0) {
-                send(player_two, "r", 1, 0);
-                sleep(0.5);
+                send(player_two, "b", 1, 0);
                 free(move);
                 free_board(board);
                 return 0;
+            }
+
+            if (buffer[0] == '\n') {
+                continue;
             }
 
             syntax_valid = is_syntax_valid(player_one, buffer);
@@ -597,9 +601,12 @@ void *game_room(void *client_socket) {
 
             printf("Player two (%d) move: %s\n", player_two, buffer);
 
+            if (buffer[0] == '\n') {
+                continue;
+            }
+
             if (buffer[0] == 0 && buffer[1] == 0) {
-                send(player_one, "r-nm", 4, 0);
-                sleep(0.5);
+                send(player_one, "b", 1, 0);
                 free(move);
                 free_board(board);
                 return 0;
@@ -633,10 +640,13 @@ void *game_room(void *client_socket) {
     /* delete board */
     free(move);
     free_board(board);
+    close(player_one);
+    close(player_two);
 }
 
+// void *user(void *client_socket)
+
 int main(int argc, char *argv[]) {
-    pthread_t tid[1];
     setlocale(LC_ALL, "en_US.UTF-8");
 
     int sockfd, client_socket, port_number, client_length;
@@ -686,21 +696,67 @@ int main(int argc, char *argv[]) {
             perror("ERROR on accept");
             exit(1);
         }
-
-        pthread_mutex_lock(&general_mutex);  // Unecesary?
-        // Create thread if we have no user waiting
-        if (player_is_waiting == 0) {
-            printf("Connected player, creating new game room...\n");
-            pthread_create(&tid[0], NULL, &game_room, &client_socket);
-            pthread_mutex_unlock(&general_mutex);  // Unecesary?
+        // pthread_t thread[1];
+        // pthread_create(&thread[0], NULL, &thread, &client_socket);
+        
+        char datachoose[10];
+        bzero(datachoose, 10);
+        if (read(client_socket, datachoose, 10) < 0) {
+            perror("ERROR reading from socket");
+            exit(1);
         }
-        // If we've a user waiting join that room
-        else {
-            // Send user two signal
-            printf("Connected player, joining game room... %d\n", client_socket);
-            challenging_player = client_socket;
-            pthread_mutex_unlock(&general_mutex);  // Unecesary?
-            pthread_cond_signal(&player_to_join);
+        printf("Buffer: %s\n", datachoose);
+
+        if (datachoose[0] == 'l' && datachoose[1] == 'o') {
+            char login[64];
+            bzero(login, 64);
+            if (read(client_socket, login, 64) < 0) {
+                perror("ERROR reading from socket");
+                exit(1);
+            }
+            printf("Buffer: %s\n", login);
+            pthread_t tid[1];
+
+            char *username = strtok(login, " ");
+            char *password = strtok(NULL, " ");
+
+            if (checkLogin(username, password)) {
+                send(client_socket, "t", 1, 0);
+                pthread_mutex_lock(&general_mutex);  // Unecesary?
+                // Create thread if we have no user waiting
+                if (player_is_waiting == 0) {
+                    printf("Connected player, creating new game room...\n");
+                    pthread_create(&tid[0], NULL, &game_room, &client_socket);
+                    pthread_mutex_unlock(&general_mutex);  // Unecesary?
+                }
+                // If we've a user waiting join that room
+                else {
+                    // Send user two signal
+                    printf("Connected player, joining game room... %d\n", client_socket);
+                    challenging_player = client_socket;
+                    pthread_mutex_unlock(&general_mutex);  // Unecesary?
+                    pthread_cond_signal(&player_to_join);
+                }
+            } else {
+                send(client_socket, "f", 1, 0);
+            }
+        } 
+        else if (datachoose[0] == 'r' && datachoose[1] == 'e') {
+            char registers[64];
+            bzero(registers, 64);
+            if (read(client_socket, registers, 64) < 0) {
+                perror("ERROR reading from socket");
+                exit(1);
+            }
+            printf("Buffer: %s\n", registers);
+            char *username = strtok(registers, " ");
+            char *password = strtok(NULL, " ");
+
+            if (registerAccount(username, password)) {
+                send(client_socket, "t", 1, 0);
+            } else {
+                send(client_socket, "f", 1, 0);
+            }
         }
     }
     close(sockfd);

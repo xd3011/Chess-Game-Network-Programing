@@ -12,6 +12,8 @@
 #define RESET "\x1B[0m"
 #define GREEN "\x1B[32m"
 
+int loggedIn = 0;
+
 void *on_signal(void *sockfd) {
     char buffer[64];
     int n;
@@ -80,8 +82,8 @@ void *on_signal(void *sockfd) {
             printf("You win\n");
         } else if (buffer[0] == 'l') {
             printf("You lose\n");
-        } else if (buffer[0] == 'r') {
-            printf("Your opponent has left the room. You are choose option");
+        } else if (buffer[0] == 'b') {
+            printf("Your opponent has left the room. You are choose option\n");
             // Print menu
         } else {
             // Print the board
@@ -94,6 +96,155 @@ void *on_signal(void *sockfd) {
         }
 
         bzero(buffer, 64);
+    }
+}
+
+void menuLogin(void *sockfd) {
+    int mainChoice;
+    char username[24], password[24];
+    char buffer[4];
+    int n;
+    int socket = *(int *)sockfd;
+
+    while (1) {
+        printf("Menu:\n");
+        printf("1. Login\n");
+        printf("2. Register\n");
+        printf("3. Exit\n");
+        printf("Select: ");
+        scanf("%d", &mainChoice);
+        switch (mainChoice) {
+            case 1:
+                n = write(socket, "login", 5);
+                if (n < 0) {
+                    perror("ERROR writing to socket");
+                    exit(1);
+                }
+                printf("Input user name: ");
+                scanf("%s", username);
+                printf("Input password: ");
+                scanf("%s", password);
+                strcat(username, " ");
+                strcat(username, password);
+                n = write(socket, username, strlen(username));
+                if (n < 0) {
+                    perror("ERROR writing to socket");
+                    exit(1);
+                }
+                while (1) {
+                    bzero(buffer, 4);
+                    n = read(socket, buffer, 4);
+                    if (n < 0) {
+                        perror("ERROR reading from socket");
+                        exit(1);
+                    }
+                    if (buffer[0] == 't') {
+                        printf("Login success\n");
+                        loggedIn = 2;
+                        return;
+                    } else if (buffer[0] == 'f') {
+                        printf("Login false\n");
+                        exit(1);
+                    }
+                }
+                break;
+            case 2:
+                n = write(socket, "register", 8);
+                if (n < 0) {
+                    perror("ERROR writing to socket");
+                    exit(1);
+                }
+                printf("Input user name: ");
+                scanf("%s", username);
+                printf("Input password: ");
+                scanf("%s", password);
+                strcat(username, " ");
+                strcat(username, password);
+                n = write(socket, username, strlen(username));
+                if (n < 0) {
+                    perror("ERROR writing to socket");
+                    exit(1);
+                }
+                while (1) {
+                    bzero(buffer, 4);
+                    n = read(socket, buffer, 4);
+                    if (n < 0) {
+                        perror("ERROR reading from socket");
+                        exit(1);
+                    }
+                    if (buffer[0] == 't') {
+                        printf("Register success\n");
+                        break;
+                    } else if (buffer[0] == 'f') {
+                        printf("Register false\n");
+                        break;
+                    }
+                }
+                break;
+            case 3:
+                printf("Exit Success.\n");
+                exit(1);
+            default:
+                printf("Reselect.\n");
+                break;
+        }
+    }
+}
+
+void menuGame(void *sockfd) {
+    int mainChoice;
+    char username[24], password[24];
+    char buffer[4];
+    int n;
+    int socket = *(int *)sockfd;
+
+    while (1) {
+        printf("Menu:\n");
+        printf("1. Login\n");
+        printf("2. Register\n");
+        printf("2. Exit\n");
+        printf("Select: ");
+        scanf("%d", &mainChoice);
+        switch (mainChoice) {
+            case 1:
+                printf("Input user name: ");
+                scanf("%s", username);
+                printf("Input password: ");
+                scanf("%s", password);
+                strcat(username, " ");
+                strcat(username, password);
+                n = write(socket, username, strlen(username));
+                if (n < 0) {
+                    perror("ERROR writing to socket");
+                    exit(1);
+                }
+                while (1) {
+                    bzero(buffer, 4);
+                    n = read(socket, buffer, 4);
+                    if (n < 0) {
+                        perror("ERROR reading from socket");
+                        exit(1);
+                    }
+                    if (buffer[0] == 't') {
+                        printf("Login success\n");
+                        loggedIn = 2;
+                        return;
+                    } else if (buffer[0] == 'f') {
+                        printf("Login false\n");
+                        exit(1);
+                    }
+                }
+                break;
+            case 2:
+                // Wait
+                break;
+            case 3:
+                printf("Exit Success.\n");
+                exit(1);
+            default:
+                printf("Reselect.\n");
+                break;
+        }
     }
 }
 
@@ -143,24 +294,36 @@ int main(int argc, char *argv[]) {
     /* Now ask for a message from the user, this message
      * will be read by server
      */
+    menuLogin(&sockfd);
+    if (loggedIn == 2) {
+        pthread_t tid[1];
+        // Response thread
+        pthread_create(&tid[0], NULL, &on_signal, &sockfd);
 
-    pthread_t tid[1];
+        while (1) {
+            bzero(buffer, 64);
+            fgets(buffer, 64, stdin);
 
-    // Response thread
-    pthread_create(&tid[0], NULL, &on_signal, &sockfd);
+            /* Send message to the server */
+            n = write(sockfd, buffer, strlen(buffer));
 
-    while (1) {
-        bzero(buffer, 64);
-        fgets(buffer, 64, stdin);
-
-        /* Send message to the server */
-        n = write(sockfd, buffer, strlen(buffer));
-
-        if (n < 0) {
-            perror("ERROR writing to socket");
-            exit(1);
+            if (n < 0) {
+                perror("ERROR writing to socket");
+                exit(1);
+            }
         }
     }
+    // while (1) {
+    //     if (loggedIn == 0) {
+    //         menuLogin(&sockfd);
+    //     }
+    //     if (loggedIn == 1) {
+    //         menuGame(&sockfd);
+    //     }
+    //     if (loggedIn == 2) {
+
+    //     }
+    // }
 
     return 0;
 }
