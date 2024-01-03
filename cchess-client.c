@@ -14,91 +14,6 @@
 
 int loggedIn = 0;
 
-void *on_signal(void *sockfd) {
-    char buffer[64];
-    int n;
-    int socket = *(int *)sockfd;
-    int *player = (int *)malloc(sizeof(int *));
-
-    while (1) {
-        bzero(buffer, 64);
-        n = read(socket, buffer, 64);
-
-        if (n < 0) {
-            perror("ERROR reading from socket");
-            exit(1);
-        }
-
-        if (buffer[0] == 'i' || buffer[0] == 'e' || buffer[0] == '\0') {
-            if (buffer[0] == 'i') {
-                if (buffer[2] == 't') {
-                    printf("\nMake your move: \n");
-                }
-                if (buffer[2] == 'n') {
-                    printf("\nWaiting for opponent...\n");
-                }
-                if (buffer[2] == 'p') {
-                    *player = atoi(&buffer[3]);
-                    if (*player == 2) {
-                        printf("You're blacks (%c)\n", buffer[3]);
-                    } else {
-                        printf("You're whites (%c)\n", buffer[3]);
-                    }
-                }
-            } else if (buffer[0] == 'e') {
-                // Syntax errors
-                if (buffer[2] == '0') {
-                    switch (buffer[3]) {
-                        case '0':
-                            printf(RED "  ↑ ('-' missing)\n" RESET);
-                            break;
-                        case '1':
-                            printf(RED "↑ (should be letter)\n" RESET);
-                            break;
-                        case '2':
-                            printf(RED "   ↑ (should be letter)\n" RESET);
-                            break;
-                        case '3':
-                            printf(RED " ↑ (should be number)\n" RESET);
-                            break;
-                        case '4':
-                            printf(RED " ↑ (out of range)\n" RESET);
-                            break;
-                        case '5':
-                            printf(RED "   ↑ (should be number)\n" RESET);
-                            break;
-                        case '6':
-                            printf(RED "   ↑ (out of range)\n" RESET);
-                            break;
-                        case '7':
-                            printf(RED "(out of range)\n" RESET);
-                            break;
-                    }
-                }
-                printf("\nerror %s\n", buffer);
-            }
-            // Check if it's an informative or error message
-        } else if (buffer[0] == 'w') {
-            printf("You win\n");
-        } else if (buffer[0] == 'l') {
-            printf("You lose\n");
-        } else if (buffer[0] == 'b') {
-            printf("Your opponent has left the room. You are choose option\n");
-            // Print menu
-        } else {
-            // Print the board
-            system("clear");
-            if (*player == 1) {
-                print_board_buff(buffer);
-            } else {
-                print_board_buff_inverted(buffer);
-            }
-        }
-
-        bzero(buffer, 64);
-    }
-}
-
 void menuLogin(void *sockfd) {
     int mainChoice;
     char username[24], password[24];
@@ -200,13 +115,15 @@ void menuGame(void *sockfd) {
     char buffer[8];
     char invite[6];
     char username[24];
+    char oldPassword[24], newPassword[24];
     int n, check;
     int socket = *(int *)sockfd;
     while (1) {
         printf("Menu:\n");
         printf("1. Create Room\n");
         printf("2. Waiting\n");
-        printf("3. Logout\n");
+        printf("3. Change Password\n");
+        printf("4. Logout\n");
         printf("Select: ");
         scanf("%d", &mainChoice);
         switch (mainChoice) {
@@ -278,6 +195,39 @@ void menuGame(void *sockfd) {
                 }
                 break;
             case 3:
+                n = write(socket, "changepa", 8);
+                if (n < 0) {
+                    perror("ERROR writing to socket");
+                    exit(1);
+                }
+                printf("Input Old Password: ");
+                scanf("%s", oldPassword);
+                printf("Input New Password: ");
+                scanf("%s", newPassword);
+                strcat(oldPassword, " ");
+                strcat(oldPassword, newPassword);
+                n = write(socket, oldPassword, strlen(oldPassword));
+                if (n < 0) {
+                    perror("ERROR writing to socket");
+                    exit(1);
+                }
+                while (1) {
+                    bzero(buffer, 4);
+                    n = read(socket, buffer, 4);
+                    if (n < 0) {
+                        perror("ERROR reading from socket");
+                        exit(1);
+                    }
+                    if (buffer[0] == 't') {
+                        printf("Change Password success\n");
+                        break;
+                    } else if (buffer[0] == 'f') {
+                        printf("Change Password false\n");
+                        break;
+                    }
+                }
+                break;
+            case 4:
                 n = write(socket, "log--out", 8);
                 while (1) {
                     bzero(buffer, 8);
@@ -286,6 +236,8 @@ void menuGame(void *sockfd) {
                         perror("ERROR reading from socket");
                         exit(1);
                     }
+                    buffer[8] = '\0';
+                    printf("%s-%d\n", buffer, strcmp(buffer, "log-true"));
                     if (strcmp(buffer, "log-true") == 0) {
                         printf("Logout Success\n");
                         loggedIn = 0;
@@ -489,6 +441,101 @@ void menuOnRoom(void *sockfd) {
                 printf("Reselect.\n");
                 break;
         }
+    }
+}
+
+void *on_signal(void *sockfd) {
+    char buffer[64];
+    int n;
+    int socket = *(int *)sockfd;
+    int *player = (int *)malloc(sizeof(int *));
+
+    while (1) {
+        bzero(buffer, 64);
+        n = read(socket, buffer, 64);
+
+        if (n < 0) {
+            perror("ERROR reading from socket");
+            exit(1);
+        }
+
+        if (buffer[0] == 'i' || buffer[0] == 'e' || buffer[0] == '\0') {
+            if (buffer[0] == 'i') {
+                if (buffer[2] == 't') {
+                    printf("\nMake your move: \n");
+                }
+                if (buffer[2] == 'n') {
+                    printf("\nWaiting for opponent...\n");
+                }
+                if (buffer[2] == 'p') {
+                    *player = atoi(&buffer[3]);
+                    if (*player == 2) {
+                        printf("You're blacks (%c)\n", buffer[3]);
+                    } else {
+                        printf("You're whites (%c)\n", buffer[3]);
+                    }
+                }
+            } else if (buffer[0] == 'e') {
+                // Syntax errors
+                if (buffer[2] == '0') {
+                    switch (buffer[3]) {
+                        case '0':
+                            printf(RED "  ↑ ('-' missing)\n" RESET);
+                            break;
+                        case '1':
+                            printf(RED "↑ (should be letter)\n" RESET);
+                            break;
+                        case '2':
+                            printf(RED "   ↑ (should be letter)\n" RESET);
+                            break;
+                        case '3':
+                            printf(RED " ↑ (should be number)\n" RESET);
+                            break;
+                        case '4':
+                            printf(RED " ↑ (out of range)\n" RESET);
+                            break;
+                        case '5':
+                            printf(RED "   ↑ (should be number)\n" RESET);
+                            break;
+                        case '6':
+                            printf(RED "   ↑ (out of range)\n" RESET);
+                            break;
+                        case '7':
+                            printf(RED "(out of range)\n" RESET);
+                            break;
+                    }
+                }
+                printf("\nerror %s\n", buffer);
+            }
+            // Check if it's an informative or error message
+        } else if (buffer[0] == 'w') {
+            printf("You win\n");
+            exit(1);
+        } else if (buffer[0] == 'l') {
+            printf("You lose\n");
+            exit(1);
+        } else if (buffer[0] == 'b') {
+            printf("Your opponent has left the room. Please leave here\n");
+            exit(1);
+        } else if (buffer[0] == 'g' && buffer[2] == 'e') {
+            printf("The opponent surrendered. Yes or No\n");
+        } else if (buffer[0] == 'g' && buffer[2] == 'o') {
+            printf("You lose\n");
+            exit(1);
+        } else if (buffer[0] == 'g' && buffer[2] == 'n') {
+            printf("The opponent refused. Let's move\n");
+            continue;
+        } else {
+            // Print the board
+            system("clear");
+            if (*player == 1) {
+                print_board_buff(buffer);
+            } else {
+                print_board_buff_inverted(buffer);
+            }
+        }
+
+        bzero(buffer, 64);
     }
 }
 

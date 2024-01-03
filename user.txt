@@ -2,5 +2,8 @@ admin 123456
 user1 123456
 user2 123456
 xuandat3011 123
-xd3011 123
+xd3011 1
 xd30111 123
+testgame 123
+dat 1
+hieu 1
