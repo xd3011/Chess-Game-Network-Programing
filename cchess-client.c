@@ -105,7 +105,6 @@ void menuLogin(void *sockfd) {
     char buffer[4];
     int n;
     int socket = *(int *)sockfd;
-
     while (1) {
         printf("Menu:\n");
         printf("1. Login\n");
@@ -140,7 +139,7 @@ void menuLogin(void *sockfd) {
                     }
                     if (buffer[0] == 't') {
                         printf("Login success\n");
-                        loggedIn = 2;
+                        loggedIn = 1;
                         return;
                     } else if (buffer[0] == 'f') {
                         printf("Login false\n");
@@ -182,6 +181,11 @@ void menuLogin(void *sockfd) {
                 }
                 break;
             case 3:
+                n = write(socket, "exit", 4);
+                if (n < 0) {
+                    perror("ERROR writing to socket");
+                    exit(1);
+                }
                 printf("Exit Success.\n");
                 exit(1);
             default:
@@ -193,54 +197,294 @@ void menuLogin(void *sockfd) {
 
 void menuGame(void *sockfd) {
     int mainChoice;
-    char username[24], password[24];
-    char buffer[4];
-    int n;
+    char buffer[8];
+    char invite[6];
+    char username[24];
+    int n, check;
     int socket = *(int *)sockfd;
-
     while (1) {
         printf("Menu:\n");
-        printf("1. Login\n");
-        printf("2. Register\n");
-        printf("2. Exit\n");
+        printf("1. Create Room\n");
+        printf("2. Waiting\n");
+        printf("3. Logout\n");
         printf("Select: ");
         scanf("%d", &mainChoice);
         switch (mainChoice) {
             case 1:
-                printf("Input user name: ");
+                n = write(socket, "cre-room", 8);
+                while (1) {
+                    bzero(buffer, 8);
+                    n = read(socket, buffer, 8);
+                    if (n < 0) {
+                        perror("ERROR reading from socket");
+                        exit(1);
+                    }
+                    if (strcmp(buffer, "cre-true")) {
+                        printf("Create room\n");
+                        loggedIn = 2;
+                        return;
+                    }
+                }
+                break;
+            case 2:
+                n = write(socket, "waitting", 8);
+                while (1) {
+                    // Code waiting invite
+                    bzero(invite, 6);
+                    n = read(socket, invite, 6);
+                    if (n < 0) {
+                        perror("ERROR reading from socket");
+                        exit(1);
+                    }
+                    if (invite[0] == 'i' && invite[1] == 'n') {
+                        bzero(username, 24);
+                        n = read(socket, username, 24);
+                        if (n < 0) {
+                            perror("ERROR reading from socket");
+                            exit(1);
+                        }
+                        printf("Player %s invites you into the room\n", username);
+                        printf("1. Accept\n");
+                        printf("2. Refuses\n");
+                        printf("Input Chooses: ");
+                        scanf("%d", &check);
+                        if (check == 1) {
+                            n = write(socket, "accept", 6);
+                            if (n < 0) {
+                                perror("ERROR writing to socket");
+                                exit(1);
+                            }
+                            n = write(socket, username, strlen(username));
+                            if (n < 0) {
+                                perror("ERROR writing to socket");
+                                exit(1);
+                            }
+                            loggedIn = 3;
+                            return;
+                        } else if (check == 2) {
+                            n = write(socket, "refuse", 6);
+                            if (n < 0) {
+                                perror("ERROR writing to socket");
+                                exit(1);
+                            }
+                            n = write(socket, username, strlen(username));
+                            if (n < 0) {
+                                perror("ERROR writing to socket");
+                                exit(1);
+                            }
+                            break;
+                        }
+                    }
+                }
+                break;
+            case 3:
+                n = write(socket, "log--out", 8);
+                while (1) {
+                    bzero(buffer, 8);
+                    n = read(socket, buffer, 8);
+                    if (n < 0) {
+                        perror("ERROR reading from socket");
+                        exit(1);
+                    }
+                    if (strcmp(buffer, "log-true") == 0) {
+                        printf("Logout Success\n");
+                        loggedIn = 0;
+                        return;
+                    }
+                }
+                break;
+            default:
+                printf("Reselect.\n");
+                break;
+        }
+    }
+}
+
+// void *readGame(void *sockfd) {
+//     int n, check;
+//     char invite[8];
+//     char username[24];
+//     int socket = *(int *)sockfd;
+//     while (1) {
+//         // Code waiting invite
+//         bzero(invite, 8);
+//         n = read(socket, invite, 8);
+//         invite[8] = '\0';
+//         if (n < 0) {
+//             perror("ERROR reading from socket");
+//             exit(1);
+//         }
+//         if (invite[0] == 'i' && invite[1] == 'n') {
+//             bzero(username, 24);
+//             n = read(socket, username, 24);
+//             if (n < 0) {
+//                 perror("ERROR reading from socket");
+//                 exit(1);
+//             }
+//             printf("Player %s invites you into the room\n", username);
+//             printf("1. Accept\n");
+//             printf("2. Refuses\n");
+//             printf("Input Chooses: ");
+//             scanf("%d", &check);
+//             if (check == 1) {
+//                 n = write(socket, "accept", 6);
+//                 if (n < 0) {
+//                     perror("ERROR writing to socket");
+//                     exit(1);
+//                 }
+//                 n = write(socket, username, strlen(username));
+//                 if (n < 0) {
+//                     perror("ERROR writing to socket");
+//                     exit(1);
+//                 }
+//                 loggedIn = 3;
+//                 return NULL;
+//             } else if (check == 2) {
+//                 n = write(socket, "refuse", 6);
+//                 if (n < 0) {
+//                     perror("ERROR writing to socket");
+//                     exit(1);
+//                 }
+//                 n = write(socket, username, strlen(username));
+//                 if (n < 0) {
+//                     perror("ERROR writing to socket");
+//                     exit(1);
+//                 }
+//                 break;
+//             }
+//         } else if (strcmp(invite, "cre-room") == 0) {
+//             printf("Create room\n");
+//             loggedIn = 2;
+//             return NULL;
+//         }
+//     }
+// }
+
+// void *menuGame(void *sockfd) {
+//     int mainChoice;
+//     char buffer[8];
+//     int n;
+//     int socket = *(int *)sockfd;
+//     while (1) {
+//         printf("Menu:\n");
+//         printf("1. Create Room\n");
+//         printf("2. Logout\n");
+//         printf("Select: ");
+//         scanf("%d", &mainChoice);
+//         switch (mainChoice) {
+//             case 1:
+//                 n = write(socket, "cre-room", 8);
+//                 while (1) {
+//                     bzero(buffer, 8);
+//                     n = read(socket, buffer, 8);
+//                     if (n < 0) {
+//                         perror("ERROR reading from socket");
+//                         exit(1);
+//                     }
+//                     printf("%s\n", buffer);
+//                     if (strcmp(buffer, "cre-true")) {
+//                         printf("Create room\n");
+//                         loggedIn = 2;
+//                         return NULL;
+//                     }
+//                 }
+//                 break;
+//             case 2:
+//                 n = write(socket, "log--out", 8);
+//                 while (1) {
+//                     bzero(buffer, 8);
+//                     n = read(socket, buffer, 8);
+//                     if (n < 0) {
+//                         perror("ERROR reading from socket");
+//                         exit(1);
+//                     }
+//                     if (strcmp(buffer, "log-true") == 0) {
+//                         printf("Logout Success\n");
+//                         loggedIn = 0;
+//                         return NULL;
+//                     }
+//                 }
+//                 break;
+//             default:
+//                 printf("Reselect.\n");
+//                 break;
+//         }
+//     }
+// }
+
+void menuOnRoom(void *sockfd) {
+    int mainChoice;
+    char buffer[1024];
+    char dataread[7];
+    char username[24];
+    int n;
+    int socket = *(int *)sockfd;
+    while (1) {
+        printf("Menu:\n");
+        printf("1. Get User Online\n");
+        printf("2. Invite Players\n");
+        printf("3. Remove Room\n");
+        printf("Select: ");
+        scanf("%d", &mainChoice);
+        switch (mainChoice) {
+            case 1:
+                n = write(socket, "get-user", 8);
+                while (1) {
+                    bzero(buffer, 1024);
+                    n = read(socket, buffer, 1024);
+                    if (n < 0) {
+                        perror("ERROR reading from socket");
+                        exit(1);
+                    }
+                    printf("User Online:\n");
+                    printf("%s\n", buffer);
+                    if (n >= 0) {
+                        break;
+                    }
+                }
+                break;
+            case 2:
+                n = write(socket, "invite--", 8);
+                printf("Input opponent: ");
                 scanf("%s", username);
-                printf("Input password: ");
-                scanf("%s", password);
-                strcat(username, " ");
-                strcat(username, password);
                 n = write(socket, username, strlen(username));
                 if (n < 0) {
                     perror("ERROR writing to socket");
                     exit(1);
                 }
                 while (1) {
-                    bzero(buffer, 4);
-                    n = read(socket, buffer, 4);
+                    bzero(dataread, 6);
+                    n = read(socket, dataread, 6);
                     if (n < 0) {
                         perror("ERROR reading from socket");
                         exit(1);
                     }
-                    if (buffer[0] == 't') {
-                        printf("Login success\n");
-                        loggedIn = 2;
+                    dataread[6] = '\0';
+                    if (strcmp(dataread, "accept") == 0) {
+                        printf("The opponent party success\n");
+                        n = write(socket, "accept", 6);
+                        if (n < 0) {
+                            perror("ERROR writing to socket");
+                            exit(1);
+                        }
+                        loggedIn = 3;
                         return;
-                    } else if (buffer[0] == 'f') {
-                        printf("Login false\n");
-                        exit(1);
+                    } else if (strcmp(dataread, "refuse") == 0) {
+                        printf("The opponent party refuses\n");
+                        n = write(socket, "refuse", 6);
+                        if (n < 0) {
+                            perror("ERROR writing to socket");
+                            exit(1);
+                        }
+                        break;
                     }
                 }
                 break;
-            case 2:
-                // Wait
-                break;
             case 3:
-                printf("Exit Success.\n");
-                exit(1);
+                n = write(socket, "remove--", 8);
+                printf("Remove Success!\n");
+                loggedIn = 1;
+                return;
             default:
                 printf("Reselect.\n");
                 break;
@@ -294,36 +538,48 @@ int main(int argc, char *argv[]) {
     /* Now ask for a message from the user, this message
      * will be read by server
      */
-    menuLogin(&sockfd);
-    if (loggedIn == 2) {
-        pthread_t tid[1];
-        // Response thread
-        pthread_create(&tid[0], NULL, &on_signal, &sockfd);
+    while (1) {
+        if (loggedIn == 0) {
+            menuLogin(&sockfd);
+        } else if (loggedIn == 1) {
+            // pthread_t menuThreadId, readThreadId;
+            // if (pthread_create(&menuThreadId, NULL, &menuGame, &sockfd) != 0) {
+            //     perror("ERROR creating menu thread");
+            //     exit(1);
+            // }
 
-        while (1) {
-            bzero(buffer, 64);
-            fgets(buffer, 64, stdin);
+            // // Tạo thread cho đọc dữ liệu từ server
+            // if (pthread_create(&readThreadId, NULL, &readGame, &sockfd) != 0) {
+            //     perror("ERROR creating read thread");
+            //     exit(1);
+            // }
+            // while (1) {
+            //     if (loggedIn != 1) {
+            //         break;
+            //     }
+            // }
+            menuGame(&sockfd);
+        } else if (loggedIn == 2) {
+            menuOnRoom(&sockfd);
+        } else if (loggedIn == 3) {
+            pthread_t tid[1];
 
-            /* Send message to the server */
-            n = write(sockfd, buffer, strlen(buffer));
+            pthread_create(&tid[0], NULL, &on_signal, &sockfd);
 
-            if (n < 0) {
-                perror("ERROR writing to socket");
-                exit(1);
+            while (1) {
+                bzero(buffer, 64);
+                fgets(buffer, 64, stdin);
+
+                /* Send message to the server */
+                n = write(sockfd, buffer, strlen(buffer));
+
+                if (n < 0) {
+                    perror("ERROR writing to socket");
+                    exit(1);
+                }
             }
         }
     }
-    // while (1) {
-    //     if (loggedIn == 0) {
-    //         menuLogin(&sockfd);
-    //     }
-    //     if (loggedIn == 1) {
-    //         menuGame(&sockfd);
-    //     }
-    //     if (loggedIn == 2) {
-
-    //     }
-    // }
 
     return 0;
 }

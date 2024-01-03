@@ -1,3 +1,4 @@
+#include <arpa/inet.h>
 #include <locale.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -11,491 +12,38 @@
 #include <wchar.h>
 
 #include "board.c"
+#include "check_game.c"
 #include "user.c"
 
-#define PORT 8080;
+struct User {
+    char name[24];
+    int client_socket;
+};
+
+struct Room {
+    int client1;
+    int client2;
+};
+
+struct User users[100];
+struct Room rooms[100];
+int numbers = 0;
+int roomNumbers = 0;
+#define PORT 8000;
 
 // Waiting player conditional variable
-pthread_cond_t player_to_join;
 pthread_mutex_t general_mutex;
-
-bool is_diagonal(int, int);
 
 // Match player
 int challenging_player = 0;
-int player_is_waiting = 0;
 
-void move_piece(wchar_t **board, int *move) {
-    // Move piece in board from origin to dest
-    board[move[2]][move[3]] = board[*move][move[1]];
-    board[*move][move[1]] = 0;
-}
-
-bool emit(int client, char *message, int message_size) {
-    return true;
-}
-
-void translate_to_move(int *move, char *buffer) {
-    printf("buffer: %s\n", buffer);
-
-    *(move) = 8 - (*(buffer + 1) - '0');
-    move[1] = (*(buffer) - '0') - 49;
-    move[2] = 8 - (*(buffer + 4) - '0');
-    move[3] = (*(buffer + 3) - '0') - 49;
-}
-
-bool is_diagonal_clear(wchar_t **board, int *move) {
-    int *x_moves = (int *)malloc(sizeof(int));
-    int *y_moves = (int *)malloc(sizeof(int));
-
-    *(x_moves) = *(move)-move[2];
-    *(y_moves) = move[1] - move[3];
-
-    int *index = (int *)malloc(sizeof(int));
-    *(index) = abs(*x_moves) - 1;
-    wchar_t *item_at_position = (wchar_t *)malloc(sizeof(wchar_t));
-
-    // Iterate thru all items excepting initial posi
-    while (*index > 0) {
-        if (*x_moves > 0 && *y_moves > 0) {
-            printf("%lc [%d,%d]\n", board[*move - *index][move[1] - *index], *move - *index, move[1] - *index);
-            *item_at_position = board[*move - *index][move[1] - *index];
-        }
-        if (*x_moves > 0 && *y_moves < 0) {
-            printf("%lc [%d,%d]\n", board[*move - *index][move[1] + *index], *move - *index, move[1] + *index);
-            *item_at_position = board[*move - *index][move[1] + *index];
-        }
-        if (*x_moves < 0 && *y_moves < 0) {
-            printf("%lc [%d,%d]\n", board[*move + *index][move[1] + *index], *move + *index, move[1] + *index);
-            *item_at_position = board[*move + *index][move[1] + *index];
-        }
-        if (*x_moves < 0 && *y_moves > 0) {
-            printf("%lc [%d,%d]\n", board[*move + *index][move[1] - *index], *move + *index, move[1] - *index);
-            *item_at_position = board[*move + *index][move[1] - *index];
-        }
-
-        if (*item_at_position != 0) {
-            free(index);
-            free(x_moves);
-            free(y_moves);
-            free(item_at_position);
-            return false;
-        }
-
-        (*index)--;
-    }
-
-    free(index);
-    free(x_moves);
-    free(y_moves);
-    free(item_at_position);
-
-    return true;
-}
-
-bool is_syntax_valid(int player, char *move) {
-    // Look for -
-    if (move[2] != '-') {
-        send(player, "e-00", 4, 0);
-        return false;
-    }
-    // First and 3th should be characters
-    if (move[0] - '0' < 10) {
-        send(player, "e-01", 4, 0);
-        return false;
-    }
-    if (move[3] - '0' < 10) {
-        send(player, "e-02", 4, 0);
-        return false;
-    }
-
-    // Second and 5th character should be numbers
-    if (move[1] - '0' > 10) {
-        send(player, "e-03", 4, 0);
-        return false;
-    }
-    if (move[1] - '0' > 8) {
-        send(player, "e-04", 4, 0);
-        return false;
-    }
-    if (move[4] - '0' > 10) {
-        send(player, "e-05", 4, 0);
-        return false;
-    }
-    if (move[4] - '0' > 8) {
-        send(player, "e-06", 4, 0);
-        return false;
-    }
-    // Move out of range
-    if (move[0] - '0' > 56 || move[3] - '0' > 56) {
-        send(player, "e-07", 4, 0);
-        return false;
-    }
-
-    return true;
-}
-
-void broadcast(wchar_t **board, char *one_dimension_board, int player_one, int player_two) {
-    to_one_dimension_char(board, one_dimension_board);
-    printf("\tSending board to %d and %d size(%lu)\n", player_one, player_two, sizeof(one_dimension_board));
-    send(player_one, one_dimension_board, 64, 0);
-    send(player_two, one_dimension_board, 64, 0);
-    printf("\tSent board...\n");
-}
-
-int get_piece_team(wchar_t **board, int x, int y) {
-    switch (board[x][y]) {
-        case white_king:
-            return -1;
-        case white_queen:
-            return -1;
-        case white_rook:
-            return -1;
-        case white_bishop:
-            return -1;
-        case white_knight:
-            return -1;
-        case white_pawn:
-            return -1;
-        case black_king:
-            return 1;
-        case black_queen:
-            return 1;
-        case black_rook:
-            return 1;
-        case black_bishop:
-            return 1;
-        case black_knight:
-            return 1;
-        case black_pawn:
-            return 1;
-    }
-
-    return 0;
-}
-
-void promote_piece(wchar_t **board, int destX, int destY, int team) {
-    if (team == 1) {
-        board[destX][destY] = black_queen;
-    } else if (team == -1) {
-        board[destX][destY] = white_queen;
-    }
-}
-
-int get_piece_type(wchar_t piece) {
-    switch (piece) {
-        case white_king:
-            return 0;
-        case white_queen:
-            return 1;
-        case white_rook:
-            return 2;
-        case white_bishop:
-            return 3;
-        case white_knight:
-            return 4;
-        case white_pawn:
-            return 5;
-        case black_king:
-            return 0;
-        case black_queen:
-            return 1;
-        case black_rook:
-            return 2;
-        case black_bishop:
-            return 3;
-        case black_knight:
-            return 4;
-        case black_pawn:
-            return 5;
-    }
-    return -1;
-}
-
-bool is_rect(int *move) {
-    int *x_moves = (int *)malloc(sizeof(int));
-    int *y_moves = (int *)malloc(sizeof(int));
-
-    *x_moves = *(move)-move[2];
-    *y_moves = move[1] - move[3];
-
-    if ((*x_moves != 0 && *y_moves == 0) || (*y_moves != 0 && *x_moves == 0)) {
-        free(x_moves);
-        free(y_moves);
-        return true;
-    }
-
-    free(x_moves);
-    free(y_moves);
-    return false;
-}
-
-int is_rect_clear(wchar_t **board, int *move, int x_moves, int y_moves) {
-    // Is a side rect
-    int *index = (int *)malloc(sizeof(int));
-
-    if (abs(x_moves) > abs(y_moves)) {
-        *index = abs(x_moves) - 1;
-    } else {
-        *index = abs(y_moves) - 1;
-    }
-
-    // Iterate thru all items excepting initial position
-    while (*index > 0) {
-        if (*(move)-move[2] > 0) {
-            if (board[*move - (*index)][move[1]] != 0) {
-                free(index);
-                return false;
-            }
-        }
-        if (*(move)-move[2] < 0) {
-            if (board[*move + (*index)][move[1]] != 0) {
-                free(index);
-                return false;
-            }
-        }
-        if (move[1] - move[3] > 0) {
-            if (board[*move][move[1] - (*index)] != 0) {
-                free(index);
-                return false;
-            }
-        }
-        if (move[1] - move[3] < 0) {
-            if (board[*move][move[1] + (*index)] != 0) {
-                free(index);
-                return false;
-            }
-        }
-
-        (*index)--;
-    }
-
-    free(index);
-    return true;
-}
-
-bool is_diagonal(int x_moves, int y_moves) {
-    if ((abs(x_moves) - abs(y_moves)) != 0) {
-        return false;
-    }
-
-    return true;
-}
-
-int getManitud(int origin, int dest) {
-    return (abs(origin - dest));
-}
-
-bool eat_piece(wchar_t **board, int x, int y) {
-    return (get_piece_team(board, x, y) != 0);
-}
-
-void freeAll(int *piece_team, int *x_moves, int *y_moves) {
-    free(piece_team);
-    free(x_moves);
-    free(y_moves);
-}
-
-bool is_move_valid(wchar_t **board, int player, int team, int *move) {
-    int *piece_team = (int *)malloc(sizeof(int *));
-    int *x_moves = (int *)malloc(sizeof(int *));
-    int *y_moves = (int *)malloc(sizeof(int *));
-
-    *piece_team = get_piece_team(board, *(move), move[1]);
-    *x_moves = getManitud(*move, move[2]);
-    *y_moves = getManitud(move[1], move[3]);
-
-    // General errors
-    if (board[*(move)][move[1]] == 0) {
-        send(player, "e-08", 4, 0);
-        return false;
-    }  // If selected piece == 0 there's nothing selected
-    if (*piece_team == get_piece_team(board, move[2], move[3])) {
-        send(player, "e-09", 4, 0);
-        return false;
-    }  // If the origin piece's team == dest piece's team is an invalid move
-    // Check if user is moving his piece
-    if (team != *piece_team) {
-        send(player, "e-07", 4, 0);
-        return false;
-    }
-
-    printf("Player %d(%d) [%d,%d] to [%d,%d]\n", player, *piece_team, move[0], move[1], move[2], move[3]);
-
-    // XMOVES = getManitud(*move, move[2])
-    // YMOVES = getManitud(move[1], move[3])
-    printf("Moved piece -> %d \n", get_piece_type(board[*(move)][move[1]]));
-    switch (get_piece_type(board[*(move)][move[1]])) {
-        case 0: /* --- ♚ --- */
-            if (*x_moves > 1 || *y_moves > 1) {
-                send(player, "e-10", 5, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return false;
-            }
-            break;
-        case 1:
-            if (!is_rect(move) && !is_diagonal(*x_moves, *y_moves)) {
-                send(player, "e-queen", 4, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return false;
-            }
-            if (!is_rect_clear(board, move, *x_moves, *y_moves)) {
-                send(player, "e-31", 4, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return false;
-            }
-            if (!is_diagonal_clear(board, move)) {
-                send(player, "e-41", 4, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return false;
-            }
-            if (eat_piece(board, move[2], move[3])) {
-                send(player, "i-99", 4, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return true;
-            }
-            break;
-        case 2: /* --- ♜ --- */
-            if (!is_rect(move)) {
-                send(player, "e-30", 5, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return false;
-            }
-            if (!is_rect_clear(board, move, *x_moves, *y_moves)) {
-                send(player, "e-31", 4, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return false;
-            }
-            if (eat_piece(board, move[2], move[3])) {
-                send(player, "i-99", 4, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return true;
-            }
-            break;
-        case 3: /* ––– ♝ ––– */
-            if (!is_diagonal(*x_moves, *y_moves)) {
-                send(player, "e-40", 4, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return false;  // Check if it's a valid diagonal move
-            }
-            if (!is_diagonal_clear(board, move)) {
-                send(player, "e-41", 4, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return false;
-            }
-            if (eat_piece(board, move[2], move[3])) {
-                send(player, "i-99", 4, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return true;
-            }
-            break;
-        case 4: /* --- ♞ --- */
-            if ((abs(*x_moves) != 1 || abs(*y_moves) != 2) && (abs(*x_moves) != 2 || abs(*y_moves) != 1)) {
-                send(player, "e-50", 4, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return false;
-            }
-            if (eat_piece(board, move[2], move[3])) {
-                send(player, "i-99", 4, 0);
-                freeAll(piece_team, x_moves, y_moves);
-                return true;
-            }
-            break;
-        case 5: /* --- ♟ --- */
-            // Moving in Y axis
-            if (*y_moves == 1) {
-                if (*piece_team == 1 && (*move - move[2]) == 1) {
-                    if (eat_piece(board, move[2], move[3])) {
-                        send(player, "i-99", 4, 0);
-                        if (move[2] == 0) {
-                            promote_piece(board, *move, move[1], *piece_team);
-                            send(player, "i-98", 4, 0);
-                        }
-                    }
-                    freeAll(piece_team, x_moves, y_moves);
-                    return true;
-                } else if (*piece_team == -1 && (*move - move[2]) == -1) {
-                    if (eat_piece(board, move[2], move[3])) {
-                        send(player, "i-99", 4, 0);
-                        if (move[2] == 7) {
-                            promote_piece(board, *move, move[1], *piece_team);
-                            send(player, "i-98", 4, 0);
-                        }
-                    }
-                    freeAll(piece_team, x_moves, y_moves);
-                    return true;
-                }
-                freeAll(piece_team, x_moves, y_moves);
-                return false;
-            } else if (*y_moves == 0) {
-                // Check if it's the first move
-                if (*x_moves >= 2) {
-                    if (move[0] == 6 && *piece_team == 1 && (*move - move[2]) == 2) {
-                        printf("First move 1\n");
-                        freeAll(piece_team, x_moves, y_moves);
-                        return true;
-                    } else if (move[0] == 1 && *piece_team == -1 && (*move - move[2]) == -2) {
-                        printf("First move 2\n");
-                        freeAll(piece_team, x_moves, y_moves);
-                        return true;
-                    } else {
-                        send(player, "e-62", 5, 0);
-                        freeAll(piece_team, x_moves, y_moves);
-                        return false;
-                    }
-                } else if (*x_moves == 1) {
-                    if ((*piece_team == 1 && (*move - move[2]) == 1)) {
-                        if (move[2] == 0) {
-                            promote_piece(board, *move, move[1], *piece_team);
-                            send(player, "i-98", 4, 0);
-                        }
-                        freeAll(piece_team, x_moves, y_moves);
-                        return true;
-                    } else if ((*piece_team == -1 && (*move - move[2]) == -1)) {
-                        if (move[2] == 7) {
-                            promote_piece(board, *move, move[1], *piece_team);
-                            send(player, "i-98", 4, 0);
-                        }
-                        freeAll(piece_team, x_moves, y_moves);
-                        return true;
-                    } else {
-                        freeAll(piece_team, x_moves, y_moves);
-                        return false;
-                    }
-                } else {
-                    freeAll(piece_team, x_moves, y_moves);
-                    return false;
-                }
-            }
-            break;
-        default:
-            break;
-    }
-
-    freeAll(piece_team, x_moves, y_moves);
-    return true;
-}
-
-bool check_end_game(wchar_t **board) {
-    int game_over = 2;
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            if (get_piece_type(board[i][j]) == 0) {
-                game_over--;
-            }
-        }
-    }
-    if (game_over == 0) {
-        return false;
-    } else {
-        return true;
-    }
-}
-
-void *game_room(void *client_socket) {
-    /* If connection is established then start communicating */
-    int player_one = *(int *)client_socket;
-    int n, player_two;
+void *game_room() {
+    pthread_mutex_lock(&general_mutex);
+    int player_one = rooms[roomNumbers].client1;
+    int player_two = rooms[roomNumbers].client2;
+    pthread_mutex_unlock(&general_mutex);
+    int n;
+    printf("%d-%d", player_one, player_two);
     char buffer[64];
     int *move = (int *)malloc(sizeof(int) * 4);
 
@@ -504,21 +52,11 @@ void *game_room(void *client_socket) {
     char *one_dimension_board = create_od_board();
     initialize_board(board);
 
-    player_is_waiting = 1;  // Set user waiting
-
-    pthread_mutex_lock(&general_mutex);                  // Wait for player two
-    pthread_cond_wait(&player_to_join, &general_mutex);  // Wait for player wants to join signal
-
-    // TODO lock assigning player mutex
-    player_two = challenging_player;  // Asign the player_two to challenging_player
-    player_is_waiting = 0;            // Now none is waiting
-
-    pthread_mutex_unlock(&general_mutex);  // Unecesary?
-
     if (send(player_one, "i-p1", 4, 0) < 0) {
         perror("ERROR writing to socket");
         exit(1);
     }
+
     if (send(player_two, "i-p2", 4, 0) < 0) {
         perror("ERROR writing to socket");
         exit(1);
@@ -644,60 +182,212 @@ void *game_room(void *client_socket) {
     close(player_two);
 }
 
-void *user(void *client_socket) {
-    int player = *(int *)client_socket;
+int lobby(int player) {
     while (1) {
-        char datachoose[10];
-        bzero(datachoose, 10);
-        if (read(player, datachoose, 10) < 0) {
+        char lobbychoose[9];
+        bzero(lobbychoose, 9);
+        if (read(player, lobbychoose, 8) < 0) {
             perror("ERROR reading from socket");
             exit(1);
         }
-        printf("Buffer: %s\n", datachoose);
+        lobbychoose[8] = '\0';
+        printf("Lobby Choose: %s\n", lobbychoose);
+        if (strcmp(lobbychoose, "cre-room") == 0) {
+            send(player, "cre-true", 1, 0);
+            printf("Create Room\n");
+            return 1;
+        } else if (strcmp(lobbychoose, "log--out") == 0) {
+            send(player, "log-true", 1, 0);
+            printf("Logout\n");
+            return 2;
+        } else if (strcmp(lobbychoose, "waitting") == 0) {
+            while (1) {
+                bzero(lobbychoose, 6);
+                if (read(player, lobbychoose, 6) < 0) {
+                    perror("ERROR reading from socket");
+                    exit(1);
+                }
+                lobbychoose[6] = '\0';
+                printf("Buffer waitInvite: %s\n", lobbychoose);
+                if (strcmp(lobbychoose, "accept") == 0) {
+                    // Chap nhan loi moi (accept)
+                    char opponent[24];
+                    bzero(opponent, 24);
+                    if (read(player, opponent, 24) < 0) {
+                        perror("ERROR reading from socket");
+                        exit(1);
+                    }
+                    // printf("Opponent Accept: %s\n", opponent);
 
-        if (datachoose[0] == 'l' && datachoose[1] == 'o') {
-            char login[64];
-            bzero(login, 64);
-            if (read(player, login, 64) < 0) {
+                    char *token;
+                    token = strtok(opponent, "\n");
+                    for (int i = 0; i < numbers; i++) {
+                        if (strcmp(users[i].name, token) == 0) {
+                            send(users[i].client_socket, "accept", 6, 0);
+                            break;
+                        }
+                    }
+                    return 3;
+                } else if (strcmp(lobbychoose, "refuse") == 0) {
+                    // Tu choi loi moi (refuse)
+                    char opponent[24];
+                    bzero(opponent, 24);
+                    if (read(player, opponent, 24) < 0) {
+                        perror("ERROR reading from socket");
+                        exit(1);
+                    }
+                    // printf("Opponent Refuse: %s\n", opponent);
+                    char *token;
+                    token = strtok(opponent, "\n");
+                    for (int i = 0; i < numbers; i++) {
+                        if (strcmp(users[i].name, opponent) == 0) {
+                            send(users[i].client_socket, "refuse", 6, 0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+int getAllUser(int player) {
+    while (1) {
+        char datachoose[9];
+        bzero(datachoose, 8);
+        if (read(player, datachoose, 8) < 0) {
+            perror("ERROR reading from socket");
+            exit(1);
+        }
+        datachoose[8] = '\0';
+        printf("Room Data Choose: %s\n", datachoose);
+        if (strcmp(datachoose, "get-user") == 0) {
+            // Get user
+            char *users_string = malloc(sizeof(char) * 1024);
+            strcpy(users_string, "");
+            // Add users to string
+            for (int i = 0; i < numbers; i++) {
+                char user_info[128];  // Assume the maximum length of stt and name is 128, adjust if needed
+                sprintf(user_info, "%d. %s\n", i + 1, users[i].name);
+                strcat(users_string, user_info);
+                // strcat(users_string, users[i].name);
+                // strcat(users_string, "\n");
+            }
+            send(player, users_string, 1024, 0);
+        } else if (strcmp(datachoose, "invite--") == 0) {
+            while (1) {
+                char player2[24];
+                bzero(player2, 24);
+                if (read(player, player2, 24) < 0) {
+                    perror("ERROR reading from socket");
+                    exit(1);
+                }
+                printf("Invite: %s\n", player2);
+                char username[24];
+                for (int i = 0; i < numbers; i++) {
+                    if (users[i].client_socket == player) {
+                        strcpy(username, users[i].name);
+                    }
+                }
+                for (int i = 0; i < numbers; i++) {
+                    if (strcmp(users[i].name, player2) == 0) {
+                        send(users[i].client_socket, "invite", 6, 0);
+                        send(users[i].client_socket, username, strlen(username), 0);
+                    }
+                }
+                while (1) {
+                    bzero(datachoose, 6);
+                    if (read(player, datachoose, 6) < 0) {
+                        perror("ERROR reading from socket");
+                        exit(1);
+                    }
+                    datachoose[6] = '\0';
+                    if (strcmp(datachoose, "accept") == 0) {
+                        // Chap nhan loi moi (accept)
+                        for (int i = 0; i < numbers + 1; i++) {
+                            printf("%s-%d-%s-%d\n", player2, i, users[i].name, strcmp(users[i].name, player2));
+                            if (strcmp(users[i].name, player2) == 0) {
+                                int player2_socket = users[i].client_socket;
+                                // Create game....
+                                printf("Connected player, creating new game room...\n");
+                                pthread_t tid[1];
+                                rooms[roomNumbers].client1 = player;
+                                rooms[roomNumbers].client2 = player2_socket;
+
+                                pthread_create(&tid[0], NULL, &game_room, 0);
+                                return 1;
+                            }
+                        }
+                    } else if (strcmp(datachoose, "refuse") == 0) {
+                        // Tu choi loi moi (refuse)
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+    }
+}
+
+void *user(void *client_socket) {
+    int player = *(int *)client_socket;
+    int waiting = 0;
+    while (1) {
+        char userchoose[10];
+        bzero(userchoose, 10);
+        if (read(player, userchoose, 10) < 0) {
+            perror("ERROR reading from socket");
+            exit(1);
+        }
+        printf("Menu Choose: %s\n", userchoose);
+
+        if (strcmp(userchoose, "login") == 0) {
+            char login[48];
+            bzero(login, 48);
+            if (read(player, login, 48) < 0) {
                 perror("ERROR reading from socket");
                 exit(1);
             }
-            printf("Buffer: %s\n", login);
-            pthread_t tid[1];
+            printf("Login: %s\n", login);
 
             char *username = strtok(login, " ");
             char *password = strtok(NULL, " ");
 
             if (checkLogin(username, password)) {
                 send(player, "t", 1, 0);
-                pthread_mutex_lock(&general_mutex);  // Unecesary?
-                // Create thread if we have no user waiting
-                if (player_is_waiting == 0) {
-                    printf("Connected player, creating new game room...\n");
-                    pthread_create(&tid[0], NULL, &game_room, &player);
-                    pthread_mutex_unlock(&general_mutex);  // Unecesary?
+                pthread_mutex_lock(&general_mutex);
+                strcpy(users[numbers].name, username);
+                users[numbers].client_socket = player;
+                numbers++;
+                pthread_mutex_unlock(&general_mutex);
+                logLogin(username);
+                waiting = lobby(player);
+                if (waiting == 1) {
+                    getAllUser(player);
                     break;
-                }
-                // If we've a user waiting join that room
-                else {
-                    // Send user two signal
-                    printf("Connected player, joining game room... %d\n", player);
-                    challenging_player = player;
-                    pthread_mutex_unlock(&general_mutex);  // Unecesary?
-                    pthread_cond_signal(&player_to_join);
+                } else if (waiting == 2) {
+                    pthread_mutex_lock(&general_mutex);
+                    for (int i = 0; i < numbers; i++) {
+                        if (strcmp(users[i].name, username)) {
+                            strcpy(users[i].name, "");
+                            users[i].client_socket = -1;
+                        }
+                    }
+                    pthread_mutex_unlock(&general_mutex);
+                    continue;
+                } else if (waiting == 3) {
                     break;
                 }
             } else {
                 send(player, "f", 1, 0);
             }
-        } else if (datachoose[0] == 'r' && datachoose[1] == 'e') {
-            char registers[64];
-            bzero(registers, 64);
-            if (read(player, registers, 64) < 0) {
+        } else if (strcmp(userchoose, "register") == 0) {
+            char registers[48];
+            bzero(registers, 48);
+            if (read(player, registers, 48) < 0) {
                 perror("ERROR reading from socket");
                 exit(1);
             }
-            printf("Buffer: %s\n", registers);
+            printf("Register: %s\n", registers);
             char *username = strtok(registers, " ");
             char *password = strtok(NULL, " ");
 
@@ -706,8 +396,7 @@ void *user(void *client_socket) {
             } else {
                 send(player, "f", 1, 0);
             }
-        } else if (datachoose[0] == 'e' && datachoose[1] == 'x') {
-            printf("User %d exit", player);
+        } else if (strcmp(userchoose, "exit") == 0) {
             break;
         }
     }
@@ -722,7 +411,6 @@ int main(int argc, char *argv[]) {
     int n;
 
     // Conditional variable
-    pthread_cond_init(&player_to_join, NULL);
     pthread_mutex_init(&general_mutex, NULL);
 
     /* First call to socket() function */
