@@ -48,6 +48,7 @@ Tran Trung Hieu - 20204971 <br>
 > hieu
 ```
 5. On Game
+
 **Client2**
 1. Login
 ```
@@ -60,11 +61,11 @@ Tran Trung Hieu - 20204971 <br>
 > 2
 ```
 3. Accept Invite/Refuses
-  3.1 Accept
+   3.1 Accept
    ```
    > 1
    ```
-  3.2 Refuses
+   3.2 Refuses
    ```
    > 2
    ```
