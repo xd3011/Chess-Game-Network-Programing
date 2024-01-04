@@ -15,6 +15,10 @@ Tran Trung Hieu - 20204971 <br>
 ```
 > gcc cchess-client.c -o client -pthread
 ```
+**Using Makefile**
+```
+> make
+```
 
 ## Run
 **Server**
