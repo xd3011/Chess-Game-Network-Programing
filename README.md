@@ -26,6 +26,50 @@ Tran Trung Hieu - 20204971 <br>
 > ./client localhost 8080
 ```
 
+## Play Game
+**Client1**
+1. Login
+```
+> 1
+> dat
+> 1
+```
+2. Create Room
+```
+> 1
+```
+3. Get User Online
+```
+> 1
+```
+4. Invite Player
+```
+> 2
+> hieu
+```
+5. On Game
+**Client2**
+1. Login
+```
+> 1
+> hieu
+> 1
+```
+2. Waiting
+```
+> 2
+```
+3. Accept Invite/Refuses
+  3.1 Accept
+   ```
+   > 1
+   ```
+  3.2 Refuses
+   ```
+   > 2
+   ```
+4. On Game
+
 ## How to move
 ```
 > current position-next position (Ex: a2-a3)
