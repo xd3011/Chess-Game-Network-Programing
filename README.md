@@ -27,7 +27,7 @@ Tran Trung Hieu - 20204971 <br>
 ```
 
 ## Play Game
-**Client1**
+**Client 1**
 1. Login
 ```
 > 1
@@ -49,7 +49,7 @@ Tran Trung Hieu - 20204971 <br>
 ```
 5. On Game
 
-**Client2**
+**Client 2**
 1. Login
 ```
 > 1
@@ -61,6 +61,7 @@ Tran Trung Hieu - 20204971 <br>
 > 2
 ```
 3. Accept Invite/Refuses
+
    3.1 Accept
    ```
    > 1
@@ -69,7 +70,7 @@ Tran Trung Hieu - 20204971 <br>
    ```
    > 2
    ```
-4. On Game
+5. On Game
 
 ## How to move
 ```
