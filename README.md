@@ -73,5 +73,16 @@ Tran Trung Hieu - 20204971 <br>
 5. On Game
 
 ## How to move
+**Move**
 ```
 > current position-next position (Ex: a2-a3)
+```
+**Give up** (Xin thua)
+```
+> giveup
+```
+Yes/No
+```
+> yes
+> no
+```
