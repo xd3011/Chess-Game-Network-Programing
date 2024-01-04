@@ -81,7 +81,7 @@ Tran Trung Hieu - 20204971 <br>
 ```
 > giveup
 ```
-Yes/No
+Yes/No Opponent Giveup (chấp nhận hoặc từ chối cho đối phương đầu hàng)
 ```
 > yes
 > no
