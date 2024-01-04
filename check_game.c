@@ -18,7 +18,6 @@ bool emit(int client, char *message, int message_size) {
 
 void translate_to_move(int *move, char *buffer) {
     printf("buffer: %s\n", buffer);
-
     *(move) = 8 - (*(buffer + 1) - '0');
     move[1] = (*(buffer) - '0') - 49;
     move[2] = 8 - (*(buffer + 4) - '0');

@@ -7,3 +7,4 @@ xd30111 123
 testgame 123
 dat 1
 hieu 1
+duc 123

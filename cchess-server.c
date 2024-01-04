@@ -38,7 +38,7 @@ pthread_mutex_t general_mutex;
 // Match player
 int challenging_player = 0;
 
-void getUsername(int a, int b, int status) {
+void setLogEndGame(int a, int b, int status) {
     char *user1, *user2;
     for (int i = 0; i < numbers; i++) {
         if (users[i].client_socket == a && users[i].ongame == true) {
@@ -48,9 +48,44 @@ void getUsername(int a, int b, int status) {
             user2 = users[i].name;
         }
     }
-    logGame(user1, user2, status);
+    logEndGame(user1, user2, status);
 }
 
+void setLogStart(int a, int b) {
+    char *user1, *user2;
+    char logFileName[256];
+    for (int i = 0; i < numbers; i++) {
+        if (users[i].client_socket == a && users[i].ongame == true) {
+            user1 = users[i].name;
+        }
+        if (users[i].client_socket == b && users[i].ongame == true) {
+            user2 = users[i].name;
+        }
+    }
+    snprintf(logFileName, sizeof(logFileName), "%s_%s.txt", user1, user2);
+    logStart(user1, user2, logFileName);
+}
+
+void setLogOnGame(int a, int b, char *buffer, int status) {
+    char *user1, *user2;
+    char logFileName[256];
+    buffer[5] = '\0';
+    for (int i = 0; i < numbers; i++) {
+        if (users[i].client_socket == a && users[i].ongame == true) {
+            user1 = users[i].name;
+        }
+        if (users[i].client_socket == b && users[i].ongame == true) {
+            user2 = users[i].name;
+        }
+    }
+    snprintf(logFileName, sizeof(logFileName), "%s_%s.txt", user1, user2);
+    if(status == 1) {
+        logOnGame(user1, buffer, logFileName);
+    }
+    else {
+        logOnGame(user2, buffer, logFileName);
+    }
+}
 void *game_room() {
     pthread_mutex_lock(&general_mutex);
     int player_one = rooms[roomNumbers].client1;
@@ -85,6 +120,7 @@ void *game_room() {
 
     bool syntax_valid = false;
     bool move_valid = false;
+    setLogStart(player_one, player_two);
 
     while (1) {
         send(player_one, "i-tm", 4, 0);
@@ -116,7 +152,7 @@ void *game_room() {
                         send(player_two, "w", 1, 0);
                         free(move);
                         free_board(board);
-                        getUsername(player_one, player_two, 2);
+                        setLogEndGame(player_one, player_two, 2);
                         close(player_one);
                         close(player_two);
                         return 0;
@@ -129,7 +165,7 @@ void *game_room() {
                 send(player_two, "b", 1, 0);
                 free(move);
                 free_board(board);
-                getUsername(player_one, player_two, 2);
+                setLogEndGame(player_one, player_two, 2);
                 close(player_one);
                 close(player_two);
                 return 0;
@@ -140,6 +176,7 @@ void *game_room() {
                 translate_to_move(move, buffer);  // Convert to move
                 // TODO
                 move_valid = is_move_valid(board, player_one, 1, move);
+                setLogOnGame(player_one, player_two, buffer, 1);
             }
         }
 
@@ -157,7 +194,7 @@ void *game_room() {
         if (check_end_game(board)) {
             send(player_one, "w", 1, 0);
             send(player_two, "l", 1, 0);
-            getUsername(player_one, player_two, 1);
+            setLogEndGame(player_one, player_two, 1);
             close(player_one);
             close(player_two);
             break;
@@ -192,7 +229,7 @@ void *game_room() {
                         send(player_one, "w", 1, 0);
                         free(move);
                         free_board(board);
-                        getUsername(player_one, player_two, 2);
+                        setLogEndGame(player_one, player_two, 2);
                         close(player_one);
                         close(player_two);
                         return 0;
@@ -205,16 +242,15 @@ void *game_room() {
                 send(player_one, "b", 1, 0);
                 free(move);
                 free_board(board);
-                getUsername(player_one, player_two, 2);
+                setLogEndGame(player_one, player_two, 2);
                 close(player_one);
                 close(player_two);
                 return 0;
             } else {
                 syntax_valid = is_syntax_valid(player_two, buffer);
-
                 translate_to_move(move, buffer);  // Convert to move
-
                 move_valid = is_move_valid(board, player_two, -1, move);
+                setLogOnGame(player_one, player_two, buffer, 2);
             }
         }
         printf("Player two (%d) made move\n", player_two);
@@ -232,7 +268,7 @@ void *game_room() {
         if (check_end_game(board)) {
             send(player_two, "w", 1, 0);
             send(player_one, "l", 1, 0);
-            getUsername(player_one, player_two, 2);
+            setLogEndGame(player_one, player_two, 2);
             close(player_one);
             close(player_two);
             break;

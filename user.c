@@ -59,29 +59,59 @@ void logLogin(char *username) {
     fclose(file);
 }
 
-int logGame(char *username1, char *username2, int status) {
+void logEndGame(char *username1, char *username2, int status) {
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
 
     FILE *gameFile = fopen("game.txt", "a");
     if (gameFile == NULL) {
         printf("Not Open Log Game File.\n");
-        return 0;
+        return;
     }
     if (status == 1) {
         fprintf(gameFile, "%s > %s %d-%d-%d %d:%d:%d\n",
                 username1, username2,
                 tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
-    }
-    else if (status == 2) {
+    } else if (status == 2) {
         fprintf(gameFile, "%s < %s %d-%d-%d %d:%d:%d\n",
                 username1, username2,
                 tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
     }
-    
     fclose(gameFile);
+    return;
+}
+void logStart(char *username1, char *username2, char *filename) {
+    time_t now = time(NULL);
+    struct tm *tm = localtime(&now);
 
-    return 1;
+    FILE *gameFile = fopen(filename, "a");
+    if (gameFile == NULL) {
+        printf("Cannot open log file: %s\n", filename);
+        return;
+    }
+
+    fprintf(gameFile, "%s vs %s %d-%d-%d %d:%d:%d\n",
+            username1, username2,
+            tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+    fclose(gameFile);
+    return;
+}
+
+void logOnGame(char *username, char *buffer, char *filename) {
+    time_t now = time(NULL);
+    struct tm *tm = localtime(&now);
+
+    FILE *gameFile = fopen(filename, "a");
+    if (gameFile == NULL) {
+        printf("Not Open Log Game File.\n");
+        return;
+    }
+    fprintf(gameFile, "%s move: %s %d-%d-%d %d:%d:%d\n",
+            username, buffer,
+            tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+    fclose(gameFile);
+    return;
 }
 
 int changePassword(char *username, char *oldPassword, char *newPassword) {
@@ -105,7 +135,7 @@ int changePassword(char *username, char *oldPassword, char *newPassword) {
     while (fgets(line, sizeof(line), file) != NULL) {
         char *storedUsername = strtok(line, " ");
         char *storedPassword = strtok(NULL, " \n");
-        
+
         if (storedUsername != NULL && storedPassword != NULL) {
             if (strcmp(username, storedUsername) == 0) {
                 userFound = 1;
